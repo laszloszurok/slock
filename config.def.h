@@ -15,7 +15,23 @@ static const int failonclear = 1;
 static const int controlkeyclear = 1;
 
 /* default message */
-static const char * message = "                    -@                \n                   .##@               \n                  .####@              \n                  @#####@             \n                . *######@            \n               .##@o@#####@           \n              /############@          \n             /##############@         \n            @######@**%######@        \n           @######`     %#####o       \n          @######@       ######%      \n        -@#######h       ######@.`    \n       /#####h**``       `**%@####@   \n      @H@*`                    `*%#@  \n     *`                            `*\n              Session locked";
+static const char * message = "\
+                    -@                \n\
+                   .##@               \n\
+                  .####@              \n\
+                  @#####@             \n\
+                . *######@            \n\
+               .##@o@#####@           \n\
+              /############@          \n\
+             /##############@         \n\
+            @######@**%######@        \n\
+           @######`     %#####o       \n\
+          @######@       ######%      \n\
+        -@#######h       ######@.`    \n\
+       /#####h**``       `**%@####@   \n\
+      @H@*`                    `*%#@  \n\
+     *`                            `* \n\
+              Session locked";
 
 /* text color */
 static const char * text_color = "#ffffff";
