@@ -256,19 +256,19 @@ readpw(Display *dpy, struct xrandr *rr, struct lock **locks, int nscreens,
 			    IsPrivateKeypadKey(ksym))
 				continue;
 			switch (ksym) {
-              case XF86XK_AudioPlay:
-              case XF86XK_AudioStop:
-              case XF86XK_AudioPrev:
-              case XF86XK_AudioNext:
-              case XF86XK_AudioRaiseVolume:
-              case XF86XK_AudioLowerVolume:
-              case XF86XK_AudioMute:
-              case XF86XK_AudioMicMute:
-              case XF86XK_MonBrightnessDown:
-              case XF86XK_MonBrightnessUp:
-                mediaKeyPressed = 1;
-                XSendEvent(dpy, DefaultRootWindow(dpy), True, KeyPressMask, &ev);
-                break;
+                case XF86XK_AudioPlay:
+                case XF86XK_AudioStop:
+                case XF86XK_AudioPrev:
+                case XF86XK_AudioNext:
+                case XF86XK_AudioRaiseVolume:
+                case XF86XK_AudioLowerVolume:
+                case XF86XK_AudioMute:
+                case XF86XK_AudioMicMute:
+                case XF86XK_MonBrightnessDown:
+                case XF86XK_MonBrightnessUp:
+                    mediaKeyPressed = 1;
+                    XSendEvent(dpy, DefaultRootWindow(dpy), True, KeyPressMask, &ev);
+                    break;
                 case XK_Return:
                     passwd[len] = '\0';
                     errno = 0;
@@ -305,6 +305,7 @@ readpw(Display *dpy, struct xrandr *rr, struct lock **locks, int nscreens,
                 mediaKeyPressed = 0;
             }
 			if (running && oldc != color) {
+                failure = 0; // do not display the failure color it we delete all the input after typing something
 				for (screen = 0; screen < nscreens; screen++) {
 					XSetWindowBackground(dpy,
 					                     locks[screen]->win,
