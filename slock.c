@@ -14,12 +14,14 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <fontconfig/fontconfig.h>
 #include <X11/extensions/Xrandr.h>
 #include <X11/extensions/Xinerama.h>
 #include <X11/keysym.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/XF86keysym.h>
+#include <X11/Xft/Xft.h>
 
 #include "arg.h"
 #include "util.h"
@@ -92,30 +94,25 @@ static void
 writemessage(Display *dpy, Window win, int screen)
 {
 	int len, line_len, width, height, s_width, s_height, i, j, k, tab_replace, tab_size;
-	XGCValues gr_values;
-	XFontStruct *fontinfo;
-	XColor color, dummy;
+	XftFont *fontinfo;
+	XftColor xftcolor;
+	XftDraw *xftdraw;
+	XGlyphInfo ext_msg, ext_space;
 	XineramaScreenInfo *xsi;
-	GC gc;
-	fontinfo = XLoadQueryFont(dpy, font_name);
+	xftdraw = XftDrawCreate(dpy, win, DefaultVisual(dpy, screen), DefaultColormap(dpy, screen));
+	fontinfo = XftFontOpenName(dpy, screen, font_name);
+	XftColorAllocName(dpy, DefaultVisual(dpy, screen), DefaultColormap(dpy, screen), text_color, &xftcolor);
 
 	if (fontinfo == NULL) {
 		if (count_error == 0) {
 			fprintf(stderr, "slock: Unable to load font \"%s\"\n", font_name);
-			fprintf(stderr, "slock: Try listing fonts with 'slock -f'\n");
 			count_error++;
 		}
 		return;
 	}
 
-	tab_size = 8 * XTextWidth(fontinfo, " ", 1);
-
-	XAllocNamedColor(dpy, DefaultColormap(dpy, screen),
-		 text_color, &color, &dummy);
-
-	gr_values.font = fontinfo->fid;
-	gr_values.foreground = color.pixel;
-	gc=XCreateGC(dpy,win,GCFont+GCForeground, &gr_values);
+	XftTextExtentsUtf8(dpy, fontinfo, (XftChar8 *) " ", 1, &ext_space);
+	tab_size = 8 * ext_space.width;
 
 	/*  To prevent "Uninitialized" warnings. */
 	xsi = NULL;
@@ -151,8 +148,9 @@ writemessage(Display *dpy, Window win, int screen)
 		s_height = DisplayHeight(dpy, screen);
 	}
 
+	XftTextExtentsUtf8(dpy, fontinfo, (XftChar8 *)message, line_len, &ext_msg);
 	height = s_height*3/7 - (k*20)/3;
-	width  = (s_width - XTextWidth(fontinfo, message, line_len))/2;
+	width  = (s_width - ext_msg.width)/2;
 
 	/* Look for '\n' and print the text between them. */
 	for (i = j = k = 0; i <= len; i++) {
@@ -164,7 +162,7 @@ writemessage(Display *dpy, Window win, int screen)
 				j++;
 			}
 
-			XDrawString(dpy, win, gc, width + tab_size*tab_replace, height + 20*k, message + j, i - j);
+			XftDrawStringUtf8(xftdraw, &xftcolor, fontinfo, width + tab_size*tab_replace, height + 20*k, (XftChar8 *)(message + j), i - j);
 			while (i < len && message[i] == '\n') {
 				i++;
 				j = i;
@@ -176,6 +174,10 @@ writemessage(Display *dpy, Window win, int screen)
 	/* xsi should not be NULL anyway if Xinerama is active, but to be safe */
 	if (XineramaIsActive(dpy) && xsi != NULL)
 			XFree(xsi);
+
+	XftFontClose(dpy, fontinfo);
+	XftColorFree(dpy, DefaultVisual(dpy, screen), DefaultColormap(dpy, screen), &xftcolor);
+	XftDrawDestroy(xftdraw);
 }
 
 
@@ -236,7 +238,6 @@ readpw(Display *dpy, struct xrandr *rr, struct lock **locks, int nscreens,
 	running = 1;
 	failure = 0;
 	oldc = INIT;
-    mediaKeyPressed = 0;
 
 	while (running && !XNextEvent(dpy, &ev)) {
 		if (ev.type == KeyPress) {
@@ -255,49 +256,49 @@ readpw(Display *dpy, struct xrandr *rr, struct lock **locks, int nscreens,
 			    IsPrivateKeypadKey(ksym))
 				continue;
 			switch (ksym) {
-            case XF86XK_AudioPlay:
-            case XF86XK_AudioPrev:
-            case XF86XK_AudioNext:
-            case XF86XK_AudioRaiseVolume:
-            case XF86XK_AudioLowerVolume:
-            case XF86XK_AudioMute:
-            case XF86XK_AudioMicMute:
-            case XF86XK_MonBrightnessDown:
-            case XF86XK_MonBrightnessUp:
-                mediaKeyPressed = 1; // we don't want to change the color of the screen if a media key was pressed
+              case XF86XK_AudioPlay:
+              case XF86XK_AudioStop:
+              case XF86XK_AudioPrev:
+              case XF86XK_AudioNext:
+              case XF86XK_AudioRaiseVolume:
+              case XF86XK_AudioLowerVolume:
+              case XF86XK_AudioMute:
+              case XF86XK_AudioMicMute:
+              case XF86XK_MonBrightnessDown:
+              case XF86XK_MonBrightnessUp:
+                mediaKeyPressed = 1;
                 XSendEvent(dpy, DefaultRootWindow(dpy), True, KeyPressMask, &ev);
                 break;
-			case XK_Return:
-				passwd[len] = '\0';
-				errno = 0;
-				if (!(inputhash = crypt(passwd, hash)))
-					fprintf(stderr, "slock: crypt: %s\n", strerror(errno));
-				else
-					running = !!strcmp(inputhash, hash);
-				if (running) {
-					XBell(dpy, 100);
-					failure = 1;
-				}
-				explicit_bzero(&passwd, sizeof(passwd));
-				len = 0;
-				break;
-			case XK_Escape:
-				explicit_bzero(&passwd, sizeof(passwd));
-				len = 0;
-				break;
-			case XK_BackSpace:
-				if (len)
-					passwd[--len] = '\0';
-				break;
-			default:
-				if (controlkeyclear && iscntrl((int)buf[0]))
-					continue;
-				if (num && (len + num < sizeof(passwd))) {
-					memcpy(passwd + len, buf, num);
-					len += num;
-				}
-				break;
-			}
+                case XK_Return:
+                    passwd[len] = '\0';
+                    errno = 0;
+                    if (!(inputhash = crypt(passwd, hash)))
+                        fprintf(stderr, "slock: crypt: %s\n", strerror(errno));
+                    else
+                        running = !!strcmp(inputhash, hash);
+                    if (running) {
+                        XBell(dpy, 100);
+                        failure = 1;
+                    }
+                    explicit_bzero(&passwd, sizeof(passwd));
+                    len = 0;
+                    break;
+                case XK_Escape:
+                    explicit_bzero(&passwd, sizeof(passwd));
+                    len = 0;
+                    break;
+                case XK_BackSpace:
+                    if (len)
+                        passwd[--len] = '\0';
+                    break;
+                default:
+                    if (num && !iscntrl((int)buf[0]) &&
+                        (len + num < sizeof(passwd))) {
+                        memcpy(passwd + len, buf, num);
+                        len += num;
+                    }
+                    break;
+            }
 			color = len ? INPUT : ((failure || failonclear) ? FAILED : INIT);
             if (mediaKeyPressed == 1) { // if a media key was pressed don't change the color of the screen
                 color = oldc;
@@ -416,7 +417,7 @@ lockscreen(Display *dpy, struct xrandr *rr, int screen)
 static void
 usage(void)
 {
-	die("usage: slock [-v] [-f] [-m message] [cmd [arg ...]]\n");
+	die("usage: slock [-v] [-m message] [cmd [arg ...]]\n");
 }
 
 int
@@ -429,9 +430,7 @@ main(int argc, char **argv) {
 	gid_t dgid;
 	const char *hash;
 	Display *dpy;
-	int i, s, nlocks, nscreens;
-	int count_fonts;
-	char **font_names;
+	int s, nlocks, nscreens;
 
 	ARGBEGIN {
 	case 'v':
@@ -440,14 +439,6 @@ main(int argc, char **argv) {
 	case 'm':
 		message = EARGF(usage());
 		break;
-	case 'f':
-		if (!(dpy = XOpenDisplay(NULL)))
-			die("slock: cannot open display\n");
-		font_names = XListFonts(dpy, "*", 10000 /* list 10000 fonts*/, &count_fonts);
-		for (i=0; i<count_fonts; i++) {
-			fprintf(stderr, "%s\n", *(font_names+i));
-		}
-		return 0;
 	default:
 		usage();
 	} ARGEND
