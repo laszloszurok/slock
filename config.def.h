@@ -34,5 +34,5 @@ static const char * message = "\
 static const char * text_color = "#ffffff";
 
 /* text size (must be a valid size) */
-static const char * font_name = "Source Code Pro:size:pixelsize=18:antialias=true:autohint=true";
+static const char * font_name = "DejaVu Sans Mono:pixelsize=16:antialias=true:autohint=true";
 //static const char *fonts[] = { "sans-serif:size:pixelsize=24:antialias=true:autohint=true", "Font Awesome 5 Free Solid:size:pixelsize=128:antialias=true:autohint=true" };
